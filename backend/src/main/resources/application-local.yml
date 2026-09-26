@@ -1,4 +1,12 @@
 spring:
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/springmarket
+    redis:
+      host: localhost
+      port: 6379
+  cache:
+    type: redis
   datasource:
     url: jdbc:postgresql://localhost:5432/springmarket
     username: springmarket

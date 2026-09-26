@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -23,7 +24,8 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             JwtAuthFilter jwtAuthFilter,
-            ProblemDetailAuthenticationEntryPoint authenticationEntryPoint)
+            ProblemDetailAuthenticationEntryPoint authenticationEntryPoint,
+            ProblemDetailAccessDeniedHandler accessDeniedHandler)
             throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
@@ -31,7 +33,9 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(exceptions ->
-                        exceptions.authenticationEntryPoint(authenticationEntryPoint))
+                        exceptions
+                                .authenticationEntryPoint(authenticationEntryPoint)
+                                .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
                                 "/api/v1/auth/**",
@@ -41,6 +45,17 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/api/v1/api-docs/**")
                         .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/products/**")
+                        .permitAll()
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/products",
+                                "/api/v1/products/**")
+                        .hasRole("SELLER")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/products/**")
+                        .hasRole("SELLER")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/products/**")
+                        .hasRole("SELLER")
                         .anyRequest()
                         .authenticated())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
