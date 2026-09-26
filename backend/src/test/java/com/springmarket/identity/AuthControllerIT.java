@@ -60,7 +60,7 @@ class AuthControllerIT {
         String accessToken = registrationJson.get("accessToken").asText();
         mockMvc.perform(get("/actuator/metrics")
                         .header("Authorization", "Bearer " + accessToken))
-                .andExpect(status().isOk());
+                .andExpect(status().isForbidden());
 
         String refreshed = mockMvc.perform(post("/api/v1/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
