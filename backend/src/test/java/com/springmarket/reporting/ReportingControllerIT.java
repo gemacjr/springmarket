@@ -35,7 +35,7 @@ class ReportingControllerIT {
         mockMvc.perform(post("/api/v1/admin/reports/daily-sales")
                         .param("date", "2026-09-25")
                         .with(user("admin").roles("ADMIN")))
-                .andExpect(status().isAccepted());
+                .andExpect(status().isOk());
     }
 
     @Test

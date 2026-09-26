@@ -45,7 +45,7 @@ public class ReportingController {
                         .addString("requestId", UUID.randomUUID().toString())
                         .toJobParameters());
 
-        return ResponseEntity.accepted().body(new ReportJobResponse(
+        return ResponseEntity.ok(new ReportJobResponse(
                 execution.getId(), execution.getStatus().name(), reportDate));
     }
 

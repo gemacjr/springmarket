@@ -1,7 +1,9 @@
 package com.springmarket.reporting;
 
 import java.math.BigDecimal;
+import java.sql.Connection;
 import java.sql.Date;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
@@ -97,33 +99,48 @@ public class DailySalesReportJobConfig {
     @Bean
     ItemWriter<DailySalesReport> dailySalesWriter(DataSource dataSource, Clock clock) {
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
+        String upsertSql = upsertSqlFor(databaseProductName(dataSource));
         return chunk -> {
             for (DailySalesReport report : chunk) {
                 Timestamp generatedAt = Timestamp.from(clock.instant());
-                int updated = jdbcTemplate.update(
-                        """
-                        UPDATE daily_sales_reports
-                        SET order_count = ?, total_amount = ?, created_at = ?
-                        WHERE report_date = ?
-                        """,
+                jdbcTemplate.update(
+                        upsertSql,
+                        Date.valueOf(report.reportDate()),
                         report.orderCount(),
                         report.totalAmount(),
-                        generatedAt,
-                        Date.valueOf(report.reportDate()));
-                if (updated == 0) {
-                    jdbcTemplate.update(
-                            """
-                            INSERT INTO daily_sales_reports (
-                                report_date, order_count, total_amount, created_at
-                            ) VALUES (?, ?, ?, ?)
-                            """,
-                            Date.valueOf(report.reportDate()),
-                            report.orderCount(),
-                            report.totalAmount(),
-                            generatedAt);
-                }
+                        generatedAt);
             }
         };
+    }
+
+    static String upsertSqlFor(String databaseProductName) {
+        return switch (databaseProductName) {
+            case "PostgreSQL" -> """
+                    INSERT INTO daily_sales_reports (
+                        report_date, order_count, total_amount, created_at
+                    ) VALUES (?, ?, ?, ?)
+                    ON CONFLICT (report_date) DO UPDATE SET
+                        order_count = EXCLUDED.order_count,
+                        total_amount = EXCLUDED.total_amount,
+                        created_at = EXCLUDED.created_at
+                    """;
+            case "H2" -> """
+                    MERGE INTO daily_sales_reports (
+                        report_date, order_count, total_amount, created_at
+                    ) KEY (report_date) VALUES (?, ?, ?, ?)
+                    """;
+            default -> throw new IllegalStateException(
+                    "Unsupported database for daily sales report upsert: "
+                            + databaseProductName);
+        };
+    }
+
+    private static String databaseProductName(DataSource dataSource) {
+        try (Connection connection = dataSource.getConnection()) {
+            return connection.getMetaData().getDatabaseProductName();
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Could not determine reporting database", exception);
+        }
     }
 
     record SalesAggregate(long orderCount, BigDecimal totalAmount) {}

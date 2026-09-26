@@ -89,6 +89,37 @@ class DailySalesReportJobTest {
                 .isEqualByComparingTo("35.00");
     }
 
+    @Test
+    void atomicallyReplacesExistingReportForDate() throws Exception {
+        jdbcTemplate.update(
+                """
+                INSERT INTO daily_sales_reports (
+                    report_date, order_count, total_amount, created_at
+                ) VALUES (DATE '2026-09-25', 99, 999.00, CURRENT_TIMESTAMP)
+                """);
+
+        JobExecution execution = jobLauncher.run(
+                job,
+                new JobParametersBuilder()
+                        .addString("reportDate", "2026-09-25")
+                        .addLong("run.id", System.nanoTime())
+                        .toJobParameters());
+
+        assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
+        Map<String, Object> report = jdbcTemplate.queryForMap(
+                """
+                SELECT order_count, total_amount
+                FROM daily_sales_reports
+                WHERE report_date = DATE '2026-09-25'
+                """);
+        assertThat(((Number) report.get("order_count")).longValue()).isEqualTo(3);
+        assertThat((BigDecimal) report.get("total_amount"))
+                .isEqualByComparingTo("35.00");
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM daily_sales_reports", Long.class))
+                .isEqualTo(1L);
+    }
+
     private void seedOrder(String status, String totalAmount, String createdAt) {
         Instant timestamp = Instant.parse(createdAt);
         jdbcTemplate.update(
