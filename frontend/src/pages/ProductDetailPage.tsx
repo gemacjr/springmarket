@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { apiRequest, ApiError } from '../api/client'
-import type { Product } from '../api/types'
+import type { Cart, Product } from '../api/types'
+import { useAuth } from '../auth/useAuth'
 
 function formatPrice(amount: number, currency: string) {
   return new Intl.NumberFormat(undefined, {
@@ -12,8 +13,11 @@ function formatPrice(amount: number, currency: string) {
 
 export function ProductDetailPage() {
   const { id } = useParams()
+  const { session } = useAuth()
   const [product, setProduct] = useState<Product | null>(null)
   const [error, setError] = useState('')
+  const [cartMessage, setCartMessage] = useState('')
+  const [adding, setAdding] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -35,6 +39,24 @@ export function ProductDetailPage() {
     return () => controller.abort()
   }, [id])
 
+  async function addToCart() {
+    if (!product) return
+    setAdding(true)
+    setError('')
+    setCartMessage('')
+    try {
+      await apiRequest<Cart>('/api/v1/cart/items', {
+        method: 'POST',
+        body: JSON.stringify({ productId: product.id, quantity: 1 }),
+      })
+      setCartMessage('Added to cart.')
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : 'Could not add this product to your cart.')
+    } finally {
+      setAdding(false)
+    }
+  }
+
   return (
     <main className="page-shell detail-page">
       <Link className="back-link" to="/products">Back to catalog</Link>
@@ -48,6 +70,17 @@ export function ProductDetailPage() {
           <p className="detail-price">{formatPrice(product.priceAmount, product.currency)}</p>
           <p className="detail-description">{product.description}</p>
           {!product.active && <p className="availability">This product is currently unavailable.</p>}
+          {cartMessage && <div className="success" role="status">{cartMessage} <Link to="/cart">View cart</Link></div>}
+          {session?.roles.includes('BUYER') && product.active && (
+            <button
+              data-action="add-to-cart"
+              type="button"
+              disabled={adding}
+              onClick={addToCart}
+            >
+              {adding ? 'Adding…' : 'Add to cart'}
+            </button>
+          )}
           <dl>
             <div>
               <dt>Listed</dt>
