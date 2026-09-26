@@ -1,7 +1,7 @@
 package com.springmarket.payment;
 
-import com.springmarket.shared.events.PaymentFailedEvent;
 import com.springmarket.shared.events.PaymentCompletedEvent;
+import com.springmarket.shared.events.PaymentFailedEvent;
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -13,6 +13,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @DataJpaTest
@@ -37,6 +39,7 @@ class PaymentServiceTest {
         PaymentResult b = paymentService.charge(orderId, amount, "USD", "key-1");
         assertEquals(a.paymentId(), b.paymentId());
         assertEquals(1, paymentRepository.count());
+        verify(paymentEventPublisher, times(1)).publish(any(PaymentCompletedEvent.class));
     }
 
     @Test
@@ -49,6 +52,7 @@ class PaymentServiceTest {
                 ArgumentCaptor.forClass(PaymentFailedEvent.class);
         verify(paymentEventPublisher).publish(eventCaptor.capture());
         PaymentFailedEvent event = eventCaptor.getValue();
+        assertEquals(result.paymentId(), event.eventId());
         assertEquals(result.paymentId(), event.paymentId());
         assertEquals(orderId, event.orderId());
     }
@@ -61,6 +65,7 @@ class PaymentServiceTest {
                 ArgumentCaptor.forClass(PaymentCompletedEvent.class);
         verify(paymentEventPublisher).publish(eventCaptor.capture());
         PaymentCompletedEvent event = eventCaptor.getValue();
+        assertEquals(result.paymentId(), event.eventId());
         assertEquals(result.paymentId(), event.paymentId());
         assertEquals(orderId, event.orderId());
     }

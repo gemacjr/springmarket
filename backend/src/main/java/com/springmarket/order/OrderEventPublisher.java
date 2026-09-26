@@ -22,7 +22,16 @@ public class OrderEventPublisher {
     public void publish(OrderPlacedEvent event) {
         Runnable send = () -> {
             try {
-                kafkaTemplate.send(ORDER_PLACED_TOPIC, event.orderId().toString(), event);
+                kafkaTemplate
+                        .send(ORDER_PLACED_TOPIC, event.orderId().toString(), event)
+                        .whenComplete((result, exception) -> {
+                            if (exception != null) {
+                                log.error(
+                                        "Could not publish order event {}",
+                                        event.eventId(),
+                                        exception);
+                            }
+                        });
             } catch (RuntimeException exception) {
                 log.error("Could not publish order event {}", event.eventId(), exception);
             }

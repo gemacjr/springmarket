@@ -27,27 +27,29 @@ public class PaymentService {
             throw new IllegalArgumentException("Idempotency key is required");
         }
 
-        PaymentResult result = paymentRepository
-                .findByIdempotencyKey(idempotencyKey)
-                .map(Payment::toResult)
-                .orElseGet(() -> paymentRepository
-                        .save(new Payment(
-                                orderId,
-                                idempotencyKey.endsWith("-FAIL")
-                                        ? PaymentStatus.FAILURE
-                                        : PaymentStatus.SUCCESS,
-                                amount,
-                                currency,
-                                idempotencyKey,
-                                Instant.now()))
-                        .toResult());
+        var existingPayment = paymentRepository.findByIdempotencyKey(idempotencyKey);
+        if (existingPayment.isPresent()) {
+            return existingPayment.get().toResult();
+        }
+
         Instant occurredAt = Instant.now();
+        PaymentResult result = paymentRepository
+                .save(new Payment(
+                        orderId,
+                        idempotencyKey.endsWith("-FAIL")
+                                ? PaymentStatus.FAILURE
+                                : PaymentStatus.SUCCESS,
+                        amount,
+                        currency,
+                        idempotencyKey,
+                        occurredAt))
+                .toResult();
         if (result.status() == PaymentStatus.SUCCESS) {
             paymentEventPublisher.publish(new PaymentCompletedEvent(
-                    UUID.randomUUID(), occurredAt, result.paymentId(), orderId));
+                    result.paymentId(), occurredAt, result.paymentId(), orderId));
         } else {
             paymentEventPublisher.publish(new PaymentFailedEvent(
-                    UUID.randomUUID(), occurredAt, result.paymentId(), orderId));
+                    result.paymentId(), occurredAt, result.paymentId(), orderId));
         }
         return result;
     }

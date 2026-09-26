@@ -32,7 +32,11 @@ public class PaymentEventPublisher {
     private void publishAfterCommit(String topic, String key, Object event) {
         Runnable send = () -> {
             try {
-                kafkaTemplate.send(topic, key, event);
+                kafkaTemplate.send(topic, key, event).whenComplete((result, exception) -> {
+                    if (exception != null) {
+                        log.error("Could not publish payment event to {}", topic, exception);
+                    }
+                });
             } catch (RuntimeException exception) {
                 log.error("Could not publish payment event to {}", topic, exception);
             }
