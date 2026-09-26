@@ -9,6 +9,12 @@ spring:
       ddl-auto: create-drop
   flyway:
     enabled: false
+  kafka:
+    listener:
+      auto-startup: false
+    producer:
+      properties:
+        max.block.ms: 100
 
 app:
   jwt:

@@ -8,6 +8,7 @@ import com.springmarket.inventory.InventoryService;
 import com.springmarket.payment.PaymentResult;
 import com.springmarket.payment.PaymentService;
 import com.springmarket.payment.PaymentStatus;
+import com.springmarket.shared.events.OrderPlacedEvent;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -20,10 +21,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -45,6 +48,8 @@ class OrderServiceTest {
     private OrderRepository orderRepository;
     @Mock
     private PaymentService paymentService;
+    @Mock
+    private OrderEventPublisher orderEventPublisher;
 
     private final UUID buyerId = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private final String productId = "product-1";
@@ -57,6 +62,7 @@ class OrderServiceTest {
                 inventoryService,
                 orderRepository,
                 paymentService,
+                orderEventPublisher,
                 new OrderStatusMachine(),
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
@@ -93,6 +99,15 @@ class OrderServiceTest {
         assertEquals(OrderStatus.PAID, response.status());
         assertEquals(new BigDecimal("39.98"), response.totalAmount());
         assertEquals(NOW, response.createdAt());
+        ArgumentCaptor<OrderPlacedEvent> eventCaptor =
+                ArgumentCaptor.forClass(OrderPlacedEvent.class);
+        verify(orderEventPublisher).publish(eventCaptor.capture());
+        OrderPlacedEvent event = eventCaptor.getValue();
+        assertEquals(response.id(), event.orderId());
+        assertEquals(buyerId, event.buyerId());
+        assertEquals(new BigDecimal("39.98"), event.totalAmount());
+        assertEquals("USD", event.currency());
+        assertEquals(NOW, event.occurredAt());
         verify(paymentService)
                 .charge(response.id(), new BigDecimal("39.98"), "USD", response.id().toString());
         InOrder operations = inOrder(inventoryService, orderRepository, paymentService, cartService);
@@ -155,6 +170,18 @@ class OrderServiceTest {
         assertThrows(
                 InvalidOrderStateException.class,
                 () -> orderService.applyPaymentResult(order.getId(), false));
+
+        assertEquals(OrderStatus.PAID, order.getStatus());
+        verify(inventoryService, never()).release(any(), anyInt());
+    }
+
+    @Test
+    void applyPaymentResult_whenAlreadyPaid_acceptsDuplicateSuccess() {
+        Order order = pendingOrder();
+        order.transitionTo(OrderStatus.PAID, new OrderStatusMachine(), NOW);
+        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+
+        assertDoesNotThrow(() -> orderService.applyPaymentResult(order.getId(), true));
 
         assertEquals(OrderStatus.PAID, order.getStatus());
         verify(inventoryService, never()).release(any(), anyInt());

@@ -9,6 +9,7 @@ import com.springmarket.order.dto.OrderResponse;
 import com.springmarket.payment.PaymentService;
 import com.springmarket.payment.PaymentStatus;
 import com.springmarket.shared.error.DomainException;
+import com.springmarket.shared.events.OrderPlacedEvent;
 import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
@@ -22,6 +23,7 @@ public class OrderService {
     private final InventoryService inventoryService;
     private final OrderRepository orderRepository;
     private final PaymentService paymentService;
+    private final OrderEventPublisher orderEventPublisher;
     private final OrderStatusMachine orderStatusMachine;
     private final Clock clock;
 
@@ -30,12 +32,14 @@ public class OrderService {
             InventoryService inventoryService,
             OrderRepository orderRepository,
             PaymentService paymentService,
+            OrderEventPublisher orderEventPublisher,
             OrderStatusMachine orderStatusMachine,
             Clock clock) {
         this.cartService = cartService;
         this.inventoryService = inventoryService;
         this.orderRepository = orderRepository;
         this.paymentService = paymentService;
+        this.orderEventPublisher = orderEventPublisher;
         this.orderStatusMachine = orderStatusMachine;
         this.clock = clock;
     }
@@ -56,6 +60,13 @@ public class OrderService {
             order.addItem(item.productId(), item.quantity(), item.unitPrice(), item.currency());
         }
         Order saved = orderRepository.save(order);
+        orderEventPublisher.publish(new OrderPlacedEvent(
+                UUID.randomUUID(),
+                clock.instant(),
+                saved.getId(),
+                saved.getBuyerId(),
+                saved.getTotalAmount(),
+                saved.getCurrency()));
         var payment = paymentService.charge(
                 saved.getId(),
                 saved.getTotalAmount(),
@@ -89,6 +100,9 @@ public class OrderService {
                 .findById(orderId)
                 .orElseThrow(() -> new DomainException(HttpStatus.NOT_FOUND, "Order not found"));
         OrderStatus target = paid ? OrderStatus.PAID : OrderStatus.CANCELLED;
+        if (order.getStatus() == target) {
+            return;
+        }
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new InvalidOrderStateException(order.getStatus(), target);
         }

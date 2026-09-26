@@ -1,14 +1,19 @@
 package com.springmarket.payment;
 
+import com.springmarket.shared.events.PaymentFailedEvent;
+import com.springmarket.shared.events.PaymentCompletedEvent;
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.verify;
 
 @DataJpaTest
 @Import(PaymentService.class)
@@ -22,6 +27,9 @@ class PaymentServiceTest {
 
     @Autowired
     private PaymentRepository paymentRepository;
+
+    @MockitoBean
+    private PaymentEventPublisher paymentEventPublisher;
 
     @Test
     void charge_sameIdempotencyKey_returnsOriginalAndDoesNotDoubleInsert() {
@@ -37,5 +45,23 @@ class PaymentServiceTest {
                 paymentService.charge(orderId, amount, "USD", "decline-FAIL");
 
         assertEquals(PaymentStatus.FAILURE, result.status());
+        ArgumentCaptor<PaymentFailedEvent> eventCaptor =
+                ArgumentCaptor.forClass(PaymentFailedEvent.class);
+        verify(paymentEventPublisher).publish(eventCaptor.capture());
+        PaymentFailedEvent event = eventCaptor.getValue();
+        assertEquals(result.paymentId(), event.paymentId());
+        assertEquals(orderId, event.orderId());
+    }
+
+    @Test
+    void charge_success_publishesCompletedEvent() {
+        PaymentResult result = paymentService.charge(orderId, amount, "USD", "success-key");
+
+        ArgumentCaptor<PaymentCompletedEvent> eventCaptor =
+                ArgumentCaptor.forClass(PaymentCompletedEvent.class);
+        verify(paymentEventPublisher).publish(eventCaptor.capture());
+        PaymentCompletedEvent event = eventCaptor.getValue();
+        assertEquals(result.paymentId(), event.paymentId());
+        assertEquals(orderId, event.orderId());
     }
 }
