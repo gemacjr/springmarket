@@ -17,6 +17,7 @@ import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -92,6 +93,13 @@ public class OrderService {
     @Transactional(readOnly = true)
     public List<OrderResponse> mine(UUID buyerId) {
         return orderRepository.findAllByBuyerIdOrderByCreatedAtDesc(buyerId).stream()
+                .map(OrderService::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderResponse> all() {
+        return orderRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
                 .map(OrderService::toResponse)
                 .toList();
     }
