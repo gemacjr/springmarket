@@ -27,3 +27,5 @@ reports/
 
 # Remember / local tooling
 .remember/
+.worktrees/
+.superpowers/
