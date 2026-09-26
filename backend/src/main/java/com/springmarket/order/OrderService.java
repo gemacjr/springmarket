@@ -6,6 +6,8 @@ import com.springmarket.cart.dto.CartResponse;
 import com.springmarket.inventory.InventoryService;
 import com.springmarket.order.dto.OrderItemResponse;
 import com.springmarket.order.dto.OrderResponse;
+import com.springmarket.payment.PaymentService;
+import com.springmarket.payment.PaymentStatus;
 import com.springmarket.shared.error.DomainException;
 import java.time.Clock;
 import java.util.List;
@@ -19,6 +21,7 @@ public class OrderService {
     private final CartService cartService;
     private final InventoryService inventoryService;
     private final OrderRepository orderRepository;
+    private final PaymentService paymentService;
     private final OrderStatusMachine orderStatusMachine;
     private final Clock clock;
 
@@ -26,11 +29,13 @@ public class OrderService {
             CartService cartService,
             InventoryService inventoryService,
             OrderRepository orderRepository,
+            PaymentService paymentService,
             OrderStatusMachine orderStatusMachine,
             Clock clock) {
         this.cartService = cartService;
         this.inventoryService = inventoryService;
         this.orderRepository = orderRepository;
+        this.paymentService = paymentService;
         this.orderStatusMachine = orderStatusMachine;
         this.clock = clock;
     }
@@ -51,6 +56,12 @@ public class OrderService {
             order.addItem(item.productId(), item.quantity(), item.unitPrice(), item.currency());
         }
         Order saved = orderRepository.save(order);
+        var payment = paymentService.charge(
+                saved.getId(),
+                saved.getTotalAmount(),
+                saved.getCurrency(),
+                saved.getId().toString());
+        applyPaymentResult(saved.getId(), payment.status() == PaymentStatus.SUCCESS);
         cartService.clear(buyerId);
         return toResponse(saved);
     }

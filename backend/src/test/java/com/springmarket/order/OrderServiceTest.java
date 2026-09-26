@@ -5,6 +5,9 @@ import com.springmarket.cart.dto.CartItemResponse;
 import com.springmarket.cart.dto.CartResponse;
 import com.springmarket.inventory.InsufficientStockException;
 import com.springmarket.inventory.InventoryService;
+import com.springmarket.payment.PaymentResult;
+import com.springmarket.payment.PaymentService;
+import com.springmarket.payment.PaymentStatus;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -12,6 +15,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +43,8 @@ class OrderServiceTest {
     private InventoryService inventoryService;
     @Mock
     private OrderRepository orderRepository;
+    @Mock
+    private PaymentService paymentService;
 
     private final UUID buyerId = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private final String productId = "product-1";
@@ -50,6 +56,7 @@ class OrderServiceTest {
                 cartService,
                 inventoryService,
                 orderRepository,
+                paymentService,
                 new OrderStatusMachine(),
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
@@ -67,19 +74,53 @@ class OrderServiceTest {
     }
 
     @Test
-    void placeOrder_reservesPersistsPendingAndClearsCartInOrder() {
+    void placeOrder_whenPaymentSucceeds_returnsPaidOrder() {
+        AtomicReference<Order> persisted = new AtomicReference<>();
         when(cartService.getCartForCheckout(buyerId)).thenReturn(cart(2));
-        when(orderRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderRepository.save(any())).thenAnswer(invocation -> {
+            Order order = invocation.getArgument(0);
+            persisted.set(order);
+            return order;
+        });
+        when(orderRepository.findById(any()))
+                .thenAnswer(invocation -> Optional.ofNullable(persisted.get()));
+        when(paymentService.charge(any(), any(), any(), any())).thenAnswer(invocation ->
+                new PaymentResult(
+                        UUID.randomUUID(), PaymentStatus.SUCCESS, invocation.getArgument(3)));
 
         var response = orderService.placeOrder(buyerId);
 
-        assertEquals(OrderStatus.PENDING, response.status());
+        assertEquals(OrderStatus.PAID, response.status());
         assertEquals(new BigDecimal("39.98"), response.totalAmount());
         assertEquals(NOW, response.createdAt());
-        InOrder operations = inOrder(inventoryService, orderRepository, cartService);
+        verify(paymentService)
+                .charge(response.id(), new BigDecimal("39.98"), "USD", response.id().toString());
+        InOrder operations = inOrder(inventoryService, orderRepository, paymentService, cartService);
         operations.verify(inventoryService).reserve(productId, 2);
         operations.verify(orderRepository).save(any());
+        operations.verify(paymentService).charge(any(), any(), any(), any());
         operations.verify(cartService).clear(buyerId);
+    }
+
+    @Test
+    void placeOrder_whenPaymentFails_cancelsAndReleasesInventory() {
+        AtomicReference<Order> persisted = new AtomicReference<>();
+        when(cartService.getCartForCheckout(buyerId)).thenReturn(cart(2));
+        when(orderRepository.save(any())).thenAnswer(invocation -> {
+            Order order = invocation.getArgument(0);
+            persisted.set(order);
+            return order;
+        });
+        when(orderRepository.findById(any()))
+                .thenAnswer(invocation -> Optional.ofNullable(persisted.get()));
+        when(paymentService.charge(any(), any(), any(), any())).thenAnswer(invocation ->
+                new PaymentResult(
+                        UUID.randomUUID(), PaymentStatus.FAILURE, invocation.getArgument(3)));
+
+        var response = orderService.placeOrder(buyerId);
+
+        assertEquals(OrderStatus.CANCELLED, response.status());
+        verify(inventoryService).release(productId, 2);
     }
 
     @Test
