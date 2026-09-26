@@ -162,7 +162,8 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <argLine>-Dnet.bytebuddy.experimental=true</argLine>
+                    <!-- api.version: Docker Engine 29 rejects docker-java's default API <1.44 -->
+                    <argLine>-Dnet.bytebuddy.experimental=true -Dapi.version=1.44</argLine>
                     <includes>
                         <include>**/*Test.java</include>
                         <include>**/*Tests.java</include>

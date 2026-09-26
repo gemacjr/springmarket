@@ -126,9 +126,10 @@ npm run build
 ```
 
 Docker must be running for `CheckoutFlowIT`. The Maven test configuration sets
-`-Dnet.bytebuddy.experimental=true`, required when running Mockito/Byte Buddy on
-Java 25. If invoking a test outside Maven's configured Surefire process, pass
-that JVM option explicitly.
+`-Dnet.bytebuddy.experimental=true` (required for Mockito/Byte Buddy on Java 25)
+and `-Dapi.version=1.44` (Docker Engine 29 rejects older Docker API versions that
+docker-java would otherwise negotiate). If invoking a test outside Maven's
+configured Surefire process, pass those JVM options explicitly.
 
 ## Learning path
 
