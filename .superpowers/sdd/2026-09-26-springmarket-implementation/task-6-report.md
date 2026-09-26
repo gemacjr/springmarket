@@ -97,3 +97,91 @@ All five runs passed.
 - Java 25 required the supplied Byte Buddy experimental flag for Mockito-based tests.
 - Test startup logs an existing non-fatal MongoDB connection-refused monitor warning because the inventory integration test boots the application context; no Mongo operation is performed and the test passes.
 - Payment charging, Kafka, and RabbitMQ wiring remain intentionally deferred to Tasks 7-8.
+
+## Round 1/5 Quality Fixes
+
+### Findings addressed
+
+1. **Concurrent same-cart checkout**
+   - Added a `PESSIMISTIC_WRITE` cart lookup dedicated to checkout.
+   - `OrderService.placeOrder` now obtains the cart through that lookup inside its existing transaction.
+   - The cart row remains locked through inventory reservation, order persistence, and cart deletion.
+   - A concurrent second request waits for the first transaction and then receives the domain error `Cart is empty`; it cannot create another order from the consumed cart.
+
+2. **Late failed payment after PAID**
+   - `applyPaymentResult` now requires the current status to be exactly `PENDING` before applying either success or failure.
+   - A late failure for a `PAID` order raises `InvalidOrderStateException`, leaves the order `PAID`, and does not release inventory.
+   - The general `PAID -> CANCELLED` state-machine rule remains unchanged for a future explicit cancellation workflow.
+
+### RED evidence
+
+Command:
+
+```text
+./mvnw -DargLine=-Dnet.bytebuddy.experimental=true \
+  -Dtest=OrderServiceTest,ConcurrentCheckoutTest test
+```
+
+The late-payment regression failed as expected:
+
+```text
+Expected InvalidOrderStateException to be thrown, but nothing was thrown.
+Tests run: 7, Failures: 1, Errors: 0, Skipped: 0
+BUILD FAILURE
+```
+
+The initial concurrent assertion only counted commits and exposed an incidental delete conflict. It was tightened to require the intended loser outcome. Against the original implementation:
+
+```text
+Unexpected type, expected: DomainException
+but was: ObjectOptimisticLockingFailureException
+Tests run: 1, Failures: 1, Errors: 0, Skipped: 0
+BUILD FAILURE
+```
+
+This confirmed that checkout was not serializing access to the cart.
+
+### GREEN covering tests
+
+Command:
+
+```text
+./mvnw -DargLine=-Dnet.bytebuddy.experimental=true \
+  -Dtest=OrderServiceTest,ConcurrentCheckoutTest,CartServiceTest test
+```
+
+Result:
+
+```text
+Tests run: 14, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+The concurrency test uses two real `OrderService` transactions and real JPA cart/order repositories. Inventory is mocked with a bounded rendezvous so both requests reliably overlap. It asserts one committed order and requires the losing request to receive `DomainException("Cart is empty")`.
+
+Controller regression command:
+
+```text
+./mvnw -DargLine=-Dnet.bytebuddy.experimental=true \
+  -Dtest=OrderControllerIT,CatalogControllerIT,CartControllerIT test
+```
+
+Result:
+
+```text
+Tests run: 16, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+Full regression command, run by itself after an earlier pair of simultaneous Maven commands interfered through their shared `target/` directory:
+
+```text
+./mvnw -DargLine=-Dnet.bytebuddy.experimental=true test
+```
+
+Authoritative sequential result:
+
+```text
+Tests run: 31, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```

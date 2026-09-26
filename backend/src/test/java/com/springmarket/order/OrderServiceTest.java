@@ -56,7 +56,7 @@ class OrderServiceTest {
 
     @Test
     void placeOrder_whenInsufficientStock_throws() {
-        when(cartService.getCart(buyerId)).thenReturn(cart(2));
+        when(cartService.getCartForCheckout(buyerId)).thenReturn(cart(2));
         doThrow(new InsufficientStockException(productId))
                 .when(inventoryService).reserve(productId, 2);
 
@@ -68,7 +68,7 @@ class OrderServiceTest {
 
     @Test
     void placeOrder_reservesPersistsPendingAndClearsCartInOrder() {
-        when(cartService.getCart(buyerId)).thenReturn(cart(2));
+        when(cartService.getCartForCheckout(buyerId)).thenReturn(cart(2));
         when(orderRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         var response = orderService.placeOrder(buyerId);
@@ -102,6 +102,20 @@ class OrderServiceTest {
 
         assertEquals(OrderStatus.CANCELLED, order.getStatus());
         verify(inventoryService).release(productId, 2);
+    }
+
+    @Test
+    void applyPaymentResult_whenAlreadyPaid_rejectsLateFailureWithoutReleasingInventory() {
+        Order order = pendingOrder();
+        order.transitionTo(OrderStatus.PAID, new OrderStatusMachine(), NOW);
+        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+
+        assertThrows(
+                InvalidOrderStateException.class,
+                () -> orderService.applyPaymentResult(order.getId(), false));
+
+        assertEquals(OrderStatus.PAID, order.getStatus());
+        verify(inventoryService, never()).release(any(), anyInt());
     }
 
     @Test

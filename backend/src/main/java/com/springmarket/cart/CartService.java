@@ -33,6 +33,14 @@ public class CartService {
     }
 
     @Transactional
+    public CartResponse getCartForCheckout(UUID userId) {
+        return cartRepository
+                .findByUserIdForCheckout(userId)
+                .map(CartService::toResponse)
+                .orElseGet(() -> new CartResponse(null, userId, List.of(), null));
+    }
+
+    @Transactional
     public CartResponse addItem(UUID userId, String productId, int quantity) {
         requirePositiveQuantity(quantity);
         ProductResponse product = catalogService.get(productId);

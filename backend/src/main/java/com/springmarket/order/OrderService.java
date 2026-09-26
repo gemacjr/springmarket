@@ -37,7 +37,7 @@ public class OrderService {
 
     @Transactional
     public OrderResponse placeOrder(UUID buyerId) {
-        CartResponse cart = cartService.getCart(buyerId);
+        CartResponse cart = cartService.getCartForCheckout(buyerId);
         if (cart.items().isEmpty()) {
             throw new DomainException(HttpStatus.BAD_REQUEST, "Cart is empty");
         }
@@ -74,12 +74,16 @@ public class OrderService {
         Order order = orderRepository
                 .findById(orderId)
                 .orElseThrow(() -> new DomainException(HttpStatus.NOT_FOUND, "Order not found"));
+        OrderStatus target = paid ? OrderStatus.PAID : OrderStatus.CANCELLED;
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new InvalidOrderStateException(order.getStatus(), target);
+        }
         if (paid) {
-            order.transitionTo(OrderStatus.PAID, orderStatusMachine, clock.instant());
+            order.transitionTo(target, orderStatusMachine, clock.instant());
             return;
         }
 
-        order.transitionTo(OrderStatus.CANCELLED, orderStatusMachine, clock.instant());
+        order.transitionTo(target, orderStatusMachine, clock.instant());
         for (OrderItem item : order.getItems()) {
             inventoryService.release(item.getProductId(), item.getQuantity());
         }

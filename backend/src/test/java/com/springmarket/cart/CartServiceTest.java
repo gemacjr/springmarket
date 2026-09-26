@@ -37,7 +37,7 @@ class CartServiceTest {
 
     @BeforeEach
     void setUp() {
-        when(cartRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        lenient().when(cartRepository.findByUserId(userId)).thenReturn(Optional.empty());
         lenient()
                 .when(cartRepository.save(any(Cart.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -62,6 +62,17 @@ class CartServiceTest {
 
         assertEquals(new CartResponse(null, userId, java.util.List.of(), null), first);
         assertEquals(first, second);
+    }
+
+    @Test
+    void getCartForCheckout_usesLockedRepositoryLookup() {
+        Cart existing = cartWithItem(2, "19.99");
+        when(cartRepository.findByUserIdForCheckout(userId)).thenReturn(Optional.of(existing));
+
+        CartResponse cart = cartService.getCartForCheckout(userId);
+
+        assertEquals(1, cart.items().size());
+        verify(cartRepository).findByUserIdForCheckout(userId);
     }
 
     @Test
