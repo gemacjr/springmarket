@@ -103,6 +103,10 @@ class AuthControllerIT {
     void invalidAccessToken_isUnauthorized() throws Exception {
         mockMvc.perform(get("/actuator/metrics")
                         .header("Authorization", "Bearer invalid-token"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.title").value("Unauthorized"))
+                .andExpect(jsonPath("$.detail").value("Authentication required"));
     }
 }
