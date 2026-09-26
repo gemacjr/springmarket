@@ -1,5 +1,6 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
+  AUTH_UNAUTHORIZED_EVENT,
   apiRequest,
   clearAuthTokens,
   getRefreshToken,
@@ -24,6 +25,12 @@ function readSession(): AuthSession | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(readSession)
+
+  useEffect(() => {
+    const clearSession = () => setSession(null)
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, clearSession)
+    return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, clearSession)
+  }, [])
 
   function saveSession(nextSession: AuthSession) {
     setSession(nextSession)

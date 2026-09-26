@@ -1,6 +1,7 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '')
 const ACCESS_TOKEN_KEY = 'springmarket.accessToken'
 const REFRESH_TOKEN_KEY = 'springmarket.refreshToken'
+export const AUTH_UNAUTHORIZED_EVENT = 'springmarket:unauthorized'
 
 let accessToken = localStorage.getItem(ACCESS_TOKEN_KEY)
 
@@ -53,6 +54,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   if (response.status === 401) {
     clearAuthTokens()
     localStorage.removeItem('springmarket.session')
+    window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT))
     if (window.location.pathname !== '/login') {
       window.location.assign('/login')
     }
