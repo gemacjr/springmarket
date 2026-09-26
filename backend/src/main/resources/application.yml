@@ -1,6 +1,9 @@
 spring:
   application:
     name: springmarket
+  mvc:
+    problemdetails:
+      enabled: true
   profiles:
     default: local
 

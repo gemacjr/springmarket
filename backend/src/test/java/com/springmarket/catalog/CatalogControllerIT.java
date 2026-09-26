@@ -1,6 +1,7 @@
 package com.springmarket.catalog;
 
 import com.springmarket.catalog.dto.ProductResponse;
+import com.springmarket.catalog.dto.ReviewResponse;
 import com.springmarket.shared.error.ApiExceptionHandler;
 import com.springmarket.shared.security.JwtAuthFilter;
 import com.springmarket.shared.security.JwtService;
@@ -27,6 +28,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -95,6 +97,95 @@ class CatalogControllerIT {
                 .andExpect(status().isForbidden())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
+    void createWithoutPriceReturnsProblemDetails() throws Exception {
+        mockMvc.perform(post("/api/v1/products")
+                        .with(user(principal("SELLER")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Coffee",
+                                  "description": "Single-origin beans",
+                                  "currency": "USD",
+                                  "category": "GROCERY"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    void updateWithoutPriceReturnsProblemDetails() throws Exception {
+        mockMvc.perform(put("/api/v1/products/product-1")
+                        .with(user(principal("SELLER")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Coffee",
+                                  "description": "Single-origin beans",
+                                  "currency": "USD",
+                                  "category": "GROCERY",
+                                  "active": true
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    void malformedJsonReturnsProblemDetails() throws Exception {
+        mockMvc.perform(post("/api/v1/products")
+                        .with(user(principal("SELLER")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    void invalidPageTypeReturnsProblemDetails() throws Exception {
+        mockMvc.perform(get("/api/v1/products").queryParam("page", "not-a-number"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    void buyerCanAddReview() throws Exception {
+        UserPrincipal buyer = principal("BUYER");
+        when(catalogService.addReview(eq("product-1"), eq(buyer.userId()), any()))
+                .thenReturn(new ReviewResponse(
+                        "review-1",
+                        "product-1",
+                        buyer.userId(),
+                        5,
+                        "Excellent",
+                        Instant.parse("2026-09-26T12:00:00Z")));
+
+        mockMvc.perform(post("/api/v1/products/product-1/reviews")
+                        .with(user(buyer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"rating": 5, "comment": "Excellent"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.buyerId").value(buyer.userId().toString()));
+    }
+
+    @Test
+    void anonymousCannotAddReview() throws Exception {
+        mockMvc.perform(post("/api/v1/products/product-1/reviews")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"rating": 5, "comment": "Excellent"}
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
     }
 
     private UserPrincipal principal(String role) {
