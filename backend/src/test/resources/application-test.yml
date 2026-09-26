@@ -15,6 +15,13 @@ spring:
     producer:
       properties:
         max.block.ms: 100
+  rabbitmq:
+    listener:
+      simple:
+        auto-startup: false
+  mail:
+    host: localhost
+    port: 1025
 
 app:
   jwt:

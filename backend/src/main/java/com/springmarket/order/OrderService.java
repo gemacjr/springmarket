@@ -4,6 +4,9 @@ import com.springmarket.cart.CartService;
 import com.springmarket.cart.dto.CartItemResponse;
 import com.springmarket.cart.dto.CartResponse;
 import com.springmarket.inventory.InventoryService;
+import com.springmarket.identity.UserRepository;
+import com.springmarket.notification.OrderPaidNotificationPublisher;
+import com.springmarket.notification.SendOrderConfirmationMessage;
 import com.springmarket.order.dto.OrderItemResponse;
 import com.springmarket.order.dto.OrderResponse;
 import com.springmarket.payment.PaymentService;
@@ -24,6 +27,8 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final PaymentService paymentService;
     private final OrderEventPublisher orderEventPublisher;
+    private final UserRepository userRepository;
+    private final OrderPaidNotificationPublisher notificationPublisher;
     private final OrderStatusMachine orderStatusMachine;
     private final Clock clock;
 
@@ -33,6 +38,8 @@ public class OrderService {
             OrderRepository orderRepository,
             PaymentService paymentService,
             OrderEventPublisher orderEventPublisher,
+            UserRepository userRepository,
+            OrderPaidNotificationPublisher notificationPublisher,
             OrderStatusMachine orderStatusMachine,
             Clock clock) {
         this.cartService = cartService;
@@ -40,6 +47,8 @@ public class OrderService {
         this.orderRepository = orderRepository;
         this.paymentService = paymentService;
         this.orderEventPublisher = orderEventPublisher;
+        this.userRepository = userRepository;
+        this.notificationPublisher = notificationPublisher;
         this.orderStatusMachine = orderStatusMachine;
         this.clock = clock;
     }
@@ -108,6 +117,13 @@ public class OrderService {
         }
         if (paid) {
             order.transitionTo(target, orderStatusMachine, clock.instant());
+            String buyerEmail = userRepository
+                    .findById(order.getBuyerId())
+                    .orElseThrow(() ->
+                            new DomainException(HttpStatus.NOT_FOUND, "Buyer not found"))
+                    .getEmail();
+            notificationPublisher.publish(new SendOrderConfirmationMessage(
+                    buyerEmail, order.getId(), order.getTotalAmount()));
             return;
         }
 

@@ -5,6 +5,10 @@ import com.springmarket.cart.dto.CartItemResponse;
 import com.springmarket.cart.dto.CartResponse;
 import com.springmarket.inventory.InsufficientStockException;
 import com.springmarket.inventory.InventoryService;
+import com.springmarket.identity.User;
+import com.springmarket.identity.UserRepository;
+import com.springmarket.notification.OrderPaidNotificationPublisher;
+import com.springmarket.notification.SendOrderConfirmationMessage;
 import com.springmarket.payment.PaymentResult;
 import com.springmarket.payment.PaymentService;
 import com.springmarket.payment.PaymentStatus;
@@ -50,6 +54,12 @@ class OrderServiceTest {
     private PaymentService paymentService;
     @Mock
     private OrderEventPublisher orderEventPublisher;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private User buyer;
+    @Mock
+    private OrderPaidNotificationPublisher notificationPublisher;
 
     private final UUID buyerId = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private final String productId = "product-1";
@@ -63,6 +73,8 @@ class OrderServiceTest {
                 orderRepository,
                 paymentService,
                 orderEventPublisher,
+                userRepository,
+                notificationPublisher,
                 new OrderStatusMachine(),
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
@@ -93,6 +105,8 @@ class OrderServiceTest {
         when(paymentService.charge(any(), any(), any(), any())).thenAnswer(invocation ->
                 new PaymentResult(
                         UUID.randomUUID(), PaymentStatus.SUCCESS, invocation.getArgument(3)));
+        when(userRepository.findById(buyerId)).thenReturn(Optional.of(buyer));
+        when(buyer.getEmail()).thenReturn("buyer@example.com");
 
         var response = orderService.placeOrder(buyerId);
 
@@ -110,6 +124,8 @@ class OrderServiceTest {
         assertEquals(NOW, event.occurredAt());
         verify(paymentService)
                 .charge(response.id(), new BigDecimal("39.98"), "USD", response.id().toString());
+        verify(notificationPublisher).publish(new SendOrderConfirmationMessage(
+                "buyer@example.com", response.id(), new BigDecimal("39.98")));
         InOrder operations = inOrder(inventoryService, orderRepository, paymentService, cartService);
         operations.verify(inventoryService).reserve(productId, 2);
         operations.verify(orderRepository).save(any());
@@ -143,11 +159,15 @@ class OrderServiceTest {
     void applyPaymentResult_whenPaid_transitionsPendingToPaid() {
         Order order = pendingOrder();
         when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(userRepository.findById(buyerId)).thenReturn(Optional.of(buyer));
+        when(buyer.getEmail()).thenReturn("buyer@example.com");
 
         orderService.applyPaymentResult(order.getId(), true);
 
         assertEquals(OrderStatus.PAID, order.getStatus());
         verify(inventoryService, never()).release(any(), anyInt());
+        verify(notificationPublisher).publish(new SendOrderConfirmationMessage(
+                "buyer@example.com", order.getId(), new BigDecimal("39.98")));
     }
 
     @Test
@@ -173,6 +193,7 @@ class OrderServiceTest {
 
         assertEquals(OrderStatus.PAID, order.getStatus());
         verify(inventoryService, never()).release(any(), anyInt());
+        verify(notificationPublisher, never()).publish(any());
     }
 
     @Test
@@ -185,6 +206,7 @@ class OrderServiceTest {
 
         assertEquals(OrderStatus.PAID, order.getStatus());
         verify(inventoryService, never()).release(any(), anyInt());
+        verify(notificationPublisher, never()).publish(any());
     }
 
     @Test

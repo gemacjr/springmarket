@@ -1,4 +1,14 @@
 spring:
+  rabbitmq:
+    host: localhost
+    port: 5672
+  mail:
+    host: localhost
+    port: 1025
+    properties:
+      "[mail.smtp.connectiontimeout]": 5000
+      "[mail.smtp.timeout]": 3000
+      "[mail.smtp.writetimeout]": 5000
   data:
     mongodb:
       uri: mongodb://localhost:27017/springmarket
