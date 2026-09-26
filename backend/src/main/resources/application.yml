@@ -1,6 +1,11 @@
 spring:
   application:
     name: springmarket
+  batch:
+    job:
+      enabled: false
+    jdbc:
+      initialize-schema: never
   mvc:
     problemdetails:
       enabled: true
