@@ -4,7 +4,14 @@ spring:
     username: sa
     password:
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: create-drop
   flyway:
     enabled: false
+
+app:
+  jwt:
+    secret: test-secret-must-be-at-least-32-bytes
+  cors:
+    allowed-origin: http://localhost:5173

@@ -6,13 +6,19 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: none
+      ddl-auto: validate
     properties:
       hibernate:
         jdbc:
           time_zone: UTC
   flyway:
-    enabled: false
+    enabled: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+  cors:
+    allowed-origin: http://localhost:5173
 
 springdoc:
   api-docs:
