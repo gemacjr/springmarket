@@ -103,7 +103,7 @@ class OrderServiceTest {
     }
 
     @Test
-    void placeOrder_whenPaymentFails_cancelsAndReleasesInventory() {
+    void placeOrder_whenPaymentFails_cancelsReleasesInventoryAndPreservesCart() {
         AtomicReference<Order> persisted = new AtomicReference<>();
         when(cartService.getCartForCheckout(buyerId)).thenReturn(cart(2));
         when(orderRepository.save(any())).thenAnswer(invocation -> {
@@ -121,6 +121,7 @@ class OrderServiceTest {
 
         assertEquals(OrderStatus.CANCELLED, response.status());
         verify(inventoryService).release(productId, 2);
+        verify(cartService, never()).clear(buyerId);
     }
 
     @Test

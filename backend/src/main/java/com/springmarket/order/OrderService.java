@@ -61,8 +61,11 @@ public class OrderService {
                 saved.getTotalAmount(),
                 saved.getCurrency(),
                 saved.getId().toString());
-        applyPaymentResult(saved.getId(), payment.status() == PaymentStatus.SUCCESS);
-        cartService.clear(buyerId);
+        boolean paymentSucceeded = payment.status() == PaymentStatus.SUCCESS;
+        applyPaymentResult(saved.getId(), paymentSucceeded);
+        if (paymentSucceeded) {
+            cartService.clear(buyerId);
+        }
         return toResponse(saved);
     }
 
