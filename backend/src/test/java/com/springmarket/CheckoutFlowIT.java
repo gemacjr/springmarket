@@ -2,15 +2,19 @@ package com.springmarket;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springmarket.notification.OrderConfirmationListener;
 import com.springmarket.notification.RabbitConfig;
 import com.springmarket.notification.SendOrderConfirmationMessage;
 import com.springmarket.payment.PaymentRepository;
 import com.springmarket.support.IntegrationTestBase;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -35,11 +39,17 @@ class CheckoutFlowIT extends IntegrationTestBase {
     @Autowired
     private PaymentRepository paymentRepository;
 
+    @Autowired
+    private OrderConfirmationListener orderConfirmationListener;
+
     @MockitoBean
     private KafkaTemplate<String, Object> kafkaTemplate;
 
     @MockitoBean
     private RabbitTemplate rabbitTemplate;
+
+    @MockitoBean
+    private JavaMailSenderImpl mailSender;
 
     @Test
     void registeredBuyerChecksOutProductAndTriggersPaymentEvents() throws Exception {
@@ -89,10 +99,25 @@ class CheckoutFlowIT extends IntegrationTestBase {
         assertThat(paymentRepository.count()).isEqualTo(1);
         verify(kafkaTemplate, atLeastOnce()).send(eq("order.placed"), any(), any());
         verify(kafkaTemplate, atLeastOnce()).send(eq("payment.completed"), any(), any());
+
+        ArgumentCaptor<SendOrderConfirmationMessage> notification =
+                ArgumentCaptor.forClass(SendOrderConfirmationMessage.class);
         verify(rabbitTemplate).convertAndSend(
                 eq(RabbitConfig.NOTIFICATIONS_EXCHANGE),
                 eq(RabbitConfig.ORDER_CONFIRMATION_ROUTING_KEY),
-                any(SendOrderConfirmationMessage.class));
+                notification.capture());
+
+        orderConfirmationListener.onOrderPaid(notification.getValue());
+
+        ArgumentCaptor<SimpleMailMessage> mail =
+                ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender).send(mail.capture());
+        assertThat(mail.getValue().getTo()).containsExactly("buyer@example.com");
+        assertThat(mail.getValue().getSubject())
+                .isEqualTo("Order confirmation " + order.get("id").asText());
+        assertThat(mail.getValue().getText())
+                .isEqualTo("Your order %s has been paid. Total: 37.00"
+                        .formatted(order.get("id").asText()));
     }
 
     private String register(String email, String role) throws Exception {
