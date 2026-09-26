@@ -62,6 +62,10 @@ JWT_SECRET='change-me-to-a-long-random-string-at-least-32-chars' \
   ./backend/mvnw -f backend/pom.xml spring-boot:run
 ```
 
+Compose reads the `POSTGRES_*` values from `.env`. `JWT_SECRET` is supplied
+separately to the Spring Boot JVM by the command above; it is not consumed by
+the infrastructure-only Compose services.
+
 In another terminal:
 
 ```bash

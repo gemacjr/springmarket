@@ -168,9 +168,6 @@
                         <include>**/*Tests.java</include>
                         <include>**/*IT.java</include>
                     </includes>
-                    <systemPropertyVariables>
-                        <api.version>1.44</api.version>
-                    </systemPropertyVariables>
                 </configuration>
             </plugin>
         </plugins>

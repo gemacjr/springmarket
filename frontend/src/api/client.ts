@@ -1,9 +1,11 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '')
 const ACCESS_TOKEN_KEY = 'springmarket.accessToken'
 const REFRESH_TOKEN_KEY = 'springmarket.refreshToken'
+const SESSION_KEY = 'springmarket.session'
 export const AUTH_UNAUTHORIZED_EVENT = 'springmarket:unauthorized'
 
 let accessToken = localStorage.getItem(ACCESS_TOKEN_KEY)
+let refreshRequest: Promise<boolean> | null = null
 
 export interface ApiProblem {
   detail?: string
@@ -40,7 +42,39 @@ export function clearAuthTokens() {
   localStorage.removeItem(REFRESH_TOKEN_KEY)
 }
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function refreshAuthTokens(): Promise<boolean> {
+  const refreshToken = getRefreshToken()
+  if (!refreshToken) return false
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshToken }),
+  })
+  if (!response.ok) return false
+
+  const session = (await response.json()) as {
+    accessToken: string
+    refreshToken: string
+    [key: string]: unknown
+  }
+  setAuthTokens(session.accessToken, session.refreshToken)
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session))
+  return true
+}
+
+async function tryRefreshAuthTokens(): Promise<boolean> {
+  refreshRequest ??= refreshAuthTokens().finally(() => {
+    refreshRequest = null
+  })
+  return refreshRequest
+}
+
+export async function apiRequest<T>(
+  path: string,
+  init: RequestInit = {},
+  allowRefresh = true,
+): Promise<T> {
   const headers = new Headers(init.headers)
   if (init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
@@ -51,9 +85,18 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
 
   const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers })
 
+  if (
+    response.status === 401
+    && allowRefresh
+    && !path.startsWith('/api/v1/auth/')
+    && await tryRefreshAuthTokens()
+  ) {
+    return apiRequest<T>(path, init, false)
+  }
+
   if (response.status === 401) {
     clearAuthTokens()
-    localStorage.removeItem('springmarket.session')
+    localStorage.removeItem(SESSION_KEY)
     window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT))
     if (window.location.pathname !== '/login') {
       window.location.assign('/login')
