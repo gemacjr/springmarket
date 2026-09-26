@@ -6,6 +6,7 @@ import com.springmarket.catalog.CatalogService;
 import com.springmarket.catalog.dto.ProductResponse;
 import com.springmarket.shared.error.DomainException;
 import java.time.Clock;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -28,7 +29,7 @@ public class CartService {
         return cartRepository
                 .findByUserId(userId)
                 .map(CartService::toResponse)
-                .orElseGet(() -> toResponse(new Cart(userId, clock.instant())));
+                .orElseGet(() -> new CartResponse(null, userId, List.of(), null));
     }
 
     @Transactional

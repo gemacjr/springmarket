@@ -1,5 +1,6 @@
 package com.springmarket.shared.error;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -21,5 +22,11 @@ public class ApiExceptionHandler {
                         .findFirst()
                         .map(error -> error.getField() + ": " + error.getDefaultMessage())
                         .orElse("Request validation failed"));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    ProblemDetail handleDataIntegrityViolation(DataIntegrityViolationException exception) {
+        return ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, "Request conflicts with existing data");
     }
 }

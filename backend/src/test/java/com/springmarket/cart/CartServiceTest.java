@@ -56,6 +56,15 @@ class CartServiceTest {
     }
 
     @Test
+    void getCart_missingCartReturnsStableEmptyShape() {
+        CartResponse first = cartService.getCart(userId);
+        CartResponse second = cartService.getCart(userId);
+
+        assertEquals(new CartResponse(null, userId, java.util.List.of(), null), first);
+        assertEquals(first, second);
+    }
+
+    @Test
     void addItem_existingProductIncrementsQuantityAndRefreshesSnapshot() {
         Cart existing = cartWithItem(2, "10.00");
         when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(existing));

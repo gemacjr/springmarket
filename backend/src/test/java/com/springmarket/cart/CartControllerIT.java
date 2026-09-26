@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -72,6 +73,22 @@ class CartControllerIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].unitPrice").value(19.99))
                 .andExpect(jsonPath("$.items[0].quantity").value(2));
+    }
+
+    @Test
+    void concurrentCartInsertConflictReturnsProblemDetails() throws Exception {
+        when(cartService.addItem(eq(USER_ID), eq("product-1"), eq(2)))
+                .thenThrow(new DataIntegrityViolationException("unique constraint"));
+
+        mockMvc.perform(post("/api/v1/cart/items")
+                        .with(user(principal()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"productId": "product-1", "quantity": 2}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(409));
     }
 
     private UserPrincipal principal() {
