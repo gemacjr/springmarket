@@ -3,6 +3,7 @@ package com.springmarket.catalog;
 import com.springmarket.catalog.dto.CreateProductRequest;
 import com.springmarket.catalog.dto.ReviewRequest;
 import com.springmarket.catalog.dto.UpdateProductRequest;
+import com.springmarket.inventory.InventoryService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -37,6 +38,8 @@ class CatalogServiceTest {
     private ReviewRepository reviewRepository;
     @Mock
     private ProductCacheService productCacheService;
+    @Mock
+    private InventoryService inventoryService;
 
     private CatalogService catalogService;
 
@@ -46,6 +49,7 @@ class CatalogServiceTest {
                 productRepository,
                 reviewRepository,
                 productCacheService,
+                inventoryService,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
@@ -82,10 +86,11 @@ class CatalogServiceTest {
         var response = catalogService.create(
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
                 new CreateProductRequest(
-                        "Coffee", "Single-origin beans", new BigDecimal("18.50"), "USD", "GROCERY"));
+                        "Coffee", "Single-origin beans", new BigDecimal("18.50"), "USD", "GROCERY", 12));
 
         assertEquals("Coffee", response.name());
         assertEquals(NOW, response.createdAt());
+        verify(inventoryService).initialize(response.id(), 12);
         verify(productCacheService).clear();
     }
 

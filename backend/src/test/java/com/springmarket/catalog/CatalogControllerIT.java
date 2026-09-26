@@ -73,7 +73,8 @@ class CatalogControllerIT {
                                   "description": "Single-origin beans",
                                   "priceAmount": 18.50,
                                   "currency": "USD",
-                                  "category": "GROCERY"
+                                  "category": "GROCERY",
+                                  "initialStock": 12
                                 }
                                 """))
                 .andExpect(status().isCreated())
@@ -91,7 +92,8 @@ class CatalogControllerIT {
                                   "description": "Single-origin beans",
                                   "priceAmount": 18.50,
                                   "currency": "USD",
-                                  "category": "GROCERY"
+                                  "category": "GROCERY",
+                                  "initialStock": 12
                                 }
                                 """))
                 .andExpect(status().isForbidden())
@@ -109,7 +111,8 @@ class CatalogControllerIT {
                                   "name": "Coffee",
                                   "description": "Single-origin beans",
                                   "currency": "USD",
-                                  "category": "GROCERY"
+                                  "category": "GROCERY",
+                                  "initialStock": 12
                                 }
                                 """))
                 .andExpect(status().isBadRequest())

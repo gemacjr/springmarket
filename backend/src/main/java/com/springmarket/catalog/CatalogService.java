@@ -5,6 +5,7 @@ import com.springmarket.catalog.dto.ProductResponse;
 import com.springmarket.catalog.dto.ReviewRequest;
 import com.springmarket.catalog.dto.ReviewResponse;
 import com.springmarket.catalog.dto.UpdateProductRequest;
+import com.springmarket.inventory.InventoryService;
 import com.springmarket.shared.error.DomainException;
 import java.time.Clock;
 import java.util.UUID;
@@ -19,16 +20,19 @@ public class CatalogService {
     private final ProductRepository productRepository;
     private final ReviewRepository reviewRepository;
     private final ProductCacheService productCacheService;
+    private final InventoryService inventoryService;
     private final Clock clock;
 
     public CatalogService(
             ProductRepository productRepository,
             ReviewRepository reviewRepository,
             ProductCacheService productCacheService,
+            InventoryService inventoryService,
             Clock clock) {
         this.productRepository = productRepository;
         this.reviewRepository = reviewRepository;
         this.productCacheService = productCacheService;
+        this.inventoryService = inventoryService;
         this.clock = clock;
     }
 
@@ -44,6 +48,7 @@ public class CatalogService {
                 true,
                 clock.instant());
         ProductDocument saved = productRepository.save(product);
+        inventoryService.initialize(saved.id(), request.initialStock());
         productCacheService.clear();
         return toResponse(saved);
     }
