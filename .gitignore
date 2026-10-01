@@ -27,3 +27,22 @@ reports/
 
 # Remember / local tooling
 .remember/
+.worktrees/
+
+# Added before first GitHub push
+node_modules/
+.next/
+out/
+dist/
+build/
+target/
+target.nosync/
+.gradle/
+.terraform/
+*.tfstate
+*.tfstate.*
+.superpowers/
+.playwright-mcp/
+.venv/
+graphify-out/
+Pods/
